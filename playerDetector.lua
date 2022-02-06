@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default config, feel free to change it
-    ["version"] = 1.21,
+    ["version"] = 1.22,
     ["status"] = "SNAPSHOT",
     ["sides"] = {"back", "front", "left", "right", "bottom", "top"},
     ["emit_redstone_when_connected"] = true,
@@ -69,7 +69,6 @@ local function init()
         print("INFO : json API not installed yet, downloading...")
         local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/CC-Libs/master/ObjectJSON/json.lua")
         assert(http_request, "ERROR : failed to download the json API. HTTP request failed.")
-        end
         local f = fs.open("json.lua", "w")
         f.write(http_request.readAll())
         f.close()
@@ -104,7 +103,7 @@ local function init()
             end
             input = io.read()
         until isServerIpValid(input)
-        table.insert(config["server_ip"], input)
+        config["server_ip"] = input
 
         -- Write
         local str = json.encodePretty(config)
@@ -145,7 +144,7 @@ local function has_value(tab, val)
 --- FUNCTIONS ---
 -- Returns true if the player is connected, false otherwise
 local function arePlayersConnected(players, serverID)
-    local http_request = http.get(config["api_uri"] .. config["serverIP"]).readAll()
+    local http_request = http.get(config["api_uri"] .. config["server_ip"]).readAll()
     local body_content = json.decode(http_request)
     local joueurs = body_content["joueurs"]
     if not joueurs or not next(joueurs) then
@@ -177,11 +176,16 @@ end
 local function main()
     init()
     print("\nDetecte les joueurs : " .. textutils.serialise(config["pseudos"]))
-    print("Sur le serveur : " .. config["serverIP"])
-    print("\nEmet de la redstone quand un des joueur est connecte, sinon non.")
-    print("Pour couper un spawner il faut inverser le signal.")
+    print("Sur le serveur : " .. config["server_ip"])
+    if config["emit_redstone_when_connected"] then
+        print("\nEmet un signal de redstone quand un des joueur est connecte, sinon non.")
+        print("Pour couper un spawner il faut donc inverser le signal, il est possible d'utiliser des transmitter/receiver de redstone.")
+    else
+        print("\nN'emet PAS signal redstone quand un des joueur est connecte, sinon oui.")
+        print("Il suffit de coller le computer aux spawners, ou d'utiliser des transmitter/receiver de redstone.")
+    end
     while true do
-        actualizeRedstone(arePlayersConnected(config["pseudos"], config["serverIP"]))
+        actualizeRedstone(arePlayersConnected(config["pseudos"], config["server_ip"]))
         sleep(30)
     end
 end
