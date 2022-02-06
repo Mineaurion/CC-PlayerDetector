@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default config, feel free to change it
-    ["version"] = 1.23,
+    ["version"] = 1.25,
     ["status"] = "SNAPSHOT",
     ["sides"] = {"back", "front", "left", "right", "bottom", "top"},
     ["emit_redstone_when_connected"] = true,
@@ -55,10 +55,11 @@ local function update(should_old_config_be_erased, should_values_in_old_config_b
     if should_old_config_be_erased then
         shell.run("rm config.json")
     else
-        config["version"] = defaultConfig
+        config["version"] = defaultConfig["version"]
         saveConfig()
     end
-    sleep(10)
+    print("Reboot...")
+    sleep(5)
     os.reboot()
 end
 
@@ -78,7 +79,7 @@ end
 
 local function init()
     -- load json API
-    if not fs.exists("json") or fs.exists("json.lua") or fs.exists("rom/modules/main/json.lua") or fs.exists("rom/modules/main/json.lua") then
+    if not (fs.exists("json") or fs.exists("json.lua") or fs.exists("rom/modules/main/json.lua") or fs.exists("rom/modules/main/json.lua")) then
         print("INFO : json API not installed yet, downloading...")
         local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/CC-Libs/master/ObjectJSON/json.lua")
         assert(http_request, "ERROR : failed to download the json API. HTTP request failed.")
@@ -110,7 +111,7 @@ local function init()
         print("Ecris l'IP du serveur sur lequel tu es (ex: infinity.mineaurion.com) :")
         local input
         repeat
-            if input then -- meet the condition only if the player entered a wrong server IP
+            if input then -- enters the condition only if the player entered a wrong server IP
                 print("L'IP renseignee n'existe pas ou l'API Mineaurion n'est pas accessible.")
                 print("Retente :")
             end
