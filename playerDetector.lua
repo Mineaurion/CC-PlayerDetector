@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default config, feel free to change it
-    ["version"] = 1.22,
+    ["version"] = 1.23,
     ["status"] = "SNAPSHOT",
     ["sides"] = {"back", "front", "left", "right", "bottom", "top"},
     ["emit_redstone_when_connected"] = true,
@@ -10,6 +10,15 @@ local defaultConfig = { -- default config, feel free to change it
 }
 
 --- INIT ---
+-- Saves the config
+local function saveConfig()
+    local str = json.encodePretty(config)
+    assert(str and str ~= "", "ERROR : Encoding of the config went wrong.")
+    local file = fs.open("/config.json", "w")
+    file.write(str)
+    file.close()
+end
+
 -- Returns true if the program is up to date, false otherwise and nil on error
 local function isUpToDate()
     local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/playerDetector/master/version.json")
@@ -45,7 +54,11 @@ local function update(should_old_config_be_erased, should_values_in_old_config_b
     program_file.close()
     if should_old_config_be_erased then
         shell.run("rm config.json")
+    else
+        config["version"] = defaultConfig
+        saveConfig()
     end
+    sleep(10)
     os.reboot()
 end
 
@@ -105,12 +118,8 @@ local function init()
         until isServerIpValid(input)
         config["server_ip"] = input
 
-        -- Write
-        local str = json.encodePretty(config)
-        assert(str and str ~= "", "ERROR : Encoding of the config went wrong.")
-        local file = fs.open("/config.json", "w")
-        file.write(str)
-        file.close()
+        -- Write config
+        saveConfig()
     end
 
     -- Read config file

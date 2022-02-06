@@ -1,6 +1,6 @@
 {
     "program": "playerDetector.lua",
-    "version": 1.22,
+    "version": 1.23,
     "status": "SNAPSHOT",
     "should_old_config_be_erased": false
 }
