@@ -248,7 +248,7 @@ local function doAction(key)
     elseif string.upper(key) == "REBOOT" then
         os.reboot()
     else
-        print("Commande non reconnue, liste des commandes reconnues : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
+        print("\nCommande non reconnue, liste des commandes reconnues : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
         return
     end
     os.reboot()
