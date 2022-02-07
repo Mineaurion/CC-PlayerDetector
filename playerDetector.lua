@@ -29,7 +29,7 @@ end
 
 -- Converts something in a boolean
 local function toBoolean(anything)
-    local false_equivalent = {nil, 0, 0.0, "0", "false", "False", "FALSE"}
+    local false_equivalent = {nil, "nil", 0, 0.0, "0", "0.0", false, "false", "False", "FALSE"}
     for _,v in pairs(false_equivalent) do
         if anything == v then
             return false
@@ -88,7 +88,7 @@ local function update(should_old_config_be_erased, should_values_in_old_config_b
         config["version"] = defaultConfig["version"]
         saveConfig()
     end
-    print("Update successful.\nReboot...")
+    print("INFO : update successful.\nINFO : reboot...")
     sleep(5)
     os.reboot()
 end
@@ -148,6 +148,9 @@ local function setSides(save_config)
         local new_status = toBoolean(io.read())
         config["sides"][side] = new_status
         rs.setOutput(side, false)
+    end
+    if save_config then
+        saveConfig()
     end
 end
 
