@@ -2,12 +2,41 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.32,
+    ["version"] = 1.33,
     ["status"] = "SNAPSHOT",
-    ["sides"] = {"back", "front", "left", "right", "bottom", "top"},
+    ["sides"] = {
+        ["back"] = true,
+        ["front"] = true,
+        ["left"] = true,
+        ["right"] = true,
+        ["bottom"] = true,
+        ["top"] = true
+    },
     ["emit_redstone_when_connected"] = true,
     ["api_uri"] = "https://api.mineaurion.com/v1/serveurs/",
 }
+
+--- UTILS ---
+-- Returns true if the tab contains the val
+local function hasValue(tab, val)
+    for index,value in pairs(tab) do
+      if value == val then
+        return true
+      end
+    end
+    return false
+end
+
+-- Converts something in a boolean
+local function toBoolean(anything)
+    local false_equivalent = {nil, 0, 0.0, "0", "false", "False", "FALSE"}
+    for _,v in pairs(false_equivalent) do
+        if anything == v then
+            return false
+        end
+    end
+    return true
+end
 
 --- INIT ---
 -- Saves the config
@@ -50,7 +79,7 @@ local function update(should_old_config_be_erased, should_values_in_old_config_b
         return
     end
 	local file_name = (status == "RELEASE") and "startup" or "player_detector_dev"
-    local file = fs.open(file_name .. "lua", "w")
+    local file = fs.open(file_name, "w")
     file.write(body_content)
     file.close()
     if should_old_config_be_erased then
@@ -81,7 +110,7 @@ end
 -- Ask the player to write the pseudos to detect and update the config
 local function setPseudosList(save_config)
     config["pseudos"] = {}
-    print("Ecris les pseudos a detecter (appuyer sur entrer pour l'ajout et aussi quand tu as termine) :")
+    print("\nEcris les pseudos a detecter (appuyer sur entrer pour l'ajout et aussi quand tu as termine) :")
     local input
     repeat
         input = io.read()
@@ -96,11 +125,11 @@ end
 
 -- Ask the player to write the IP of the server he is on and update the config
 local function setServer(save_config)
-    print("Ecris l'IP du serveur sur lequel tu es (ex: infinity.mineaurion.com) :")
+    print("\nEcris l'IP du serveur sur lequel tu es (ex: infinity.mineaurion.com) :")
     local input
     repeat
         if input then -- enters the condition only if the player entered a wrong server IP
-            print("L'IP renseignee n'existe pas ou l'API Mineaurion n'est pas accessible.")
+            print("\nL'IP renseignee n'existe pas ou l'API Mineaurion n'est pas accessible.")
             print("Retente :")
         end
         input = io.read()
@@ -108,6 +137,15 @@ local function setServer(save_config)
     config["server_ip"] = input
     if save_config then
         saveConfig()
+    end
+end
+
+-- Ask the player to configure sides where the redstone will be output
+local function setSides(save_config)
+    print("\nEcris 0 ou 1 selon si tu veux que le signal de redstone soit emit ou pas :")
+    for side,status in pairs(config["sides"]) do
+        print(side .. " : " .. status .. " (statut courant)")
+        config["sides"][side] = toBoolean(io.read())
     end
 end
 
@@ -163,18 +201,6 @@ local function init()
     end
 end
 
-
---- UTILS ---
-local function has_value(tab, val)
-    for index,value in pairs(tab) do
-      if value == val then
-        return true
-      end
-    end
-    return false
-end
-
-
 --- FUNCTIONS ---
 -- Returns true if the player is connected, false otherwise
 local function arePlayersConnected(players, serverID)
@@ -185,7 +211,7 @@ local function arePlayersConnected(players, serverID)
         return false
     end
     for _,player in pairs(players) do
-        if has_value(joueurs, player) then
+        if hasValue(joueurs, player) then
             return true
         end
     end
@@ -209,10 +235,12 @@ end
 local function changeConfig(key)
     if string.upper(key) == "RESET_PSEUDOS" then
         setPseudosList(true)
-    elseif string.upper(key) == "RESET_SERVEUR_IP" then
+    elseif string.upper(key) == "RESET_SERVER_IP" then
         setServer(true)
+    elseif string.upper(key) == "CONFIG_SIDES" then
+        setSides(true)
     else
-        print("Commande non reconnues, liste commandes reconnues : RESET_PSEUDOS, RESET_SERVEUR_IP")
+        print("Commande non reconnues, liste commandes reconnues : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES")
         return
     end
     os.reboot()
@@ -228,7 +256,7 @@ end
 
 local function runEditConfig()
     while true do
-        print("\nPour reset la config taper au choix : RESET_PSEUDOS, RESET_SERVEUR_IP")
+        print("\nPour reset la config taper au choix : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES")
         local input = io.read()
         changeConfig(input)
         sleep(0)
