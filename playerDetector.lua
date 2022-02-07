@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.33,
+    ["version"] = 1.34,
     ["status"] = "SNAPSHOT",
     ["sides"] = {
         ["back"] = true,
@@ -232,15 +232,17 @@ local function actualizeRedstone(boolean_signal)
 end
 
 -- Change the config
-local function changeConfig(key)
+local function doAction(key)
     if string.upper(key) == "RESET_PSEUDOS" then
         setPseudosList(true)
     elseif string.upper(key) == "RESET_SERVER_IP" then
         setServer(true)
     elseif string.upper(key) == "CONFIG_SIDES" then
         setSides(true)
+    elseif string.upper(key) == "REBOOT" then
+        os.reboot()
     else
-        print("Commande non reconnues, liste commandes reconnues : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES")
+        print("Commande non reconnue, liste des commandes reconnues : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
         return
     end
     os.reboot()
@@ -254,11 +256,11 @@ local function runDetector()
     end
 end
 
-local function runEditConfig()
+local function runDetectAction()
     while true do
-        print("\nPour reset la config taper au choix : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES")
+        print("\nPour reset la config taper au choix ou reboot, ecris : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
         local input = io.read()
-        changeConfig(input)
+        doAction(input)
         sleep(0)
     end
 end
@@ -274,7 +276,7 @@ local function main()
         print("\nN'emet PAS signal redstone quand un des joueur est connecte, sinon oui.")
         print("Il suffit de coller le computer aux spawners, ou d'utiliser des transmitter/receiver de redstone.")
     end
-    parallel.waitForAll(runDetector, runEditConfig)
+    parallel.waitForAny(runDetector, runDetectAction)
 end
 
 main()
