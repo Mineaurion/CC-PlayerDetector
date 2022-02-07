@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default config, feel free to change it
-    ["version"] = 1.3,
+    ["version"] = 1.31,
     ["status"] = "SNAPSHOT",
     ["sides"] = {"back", "front", "left", "right", "bottom", "top"},
     ["emit_redstone_when_connected"] = true,
@@ -49,7 +49,7 @@ local function update(should_old_config_be_erased, should_values_in_old_config_b
         print("WARNING : failed to update. Request body is empty.")
         return
     end
-	local file_name = if status == "RELEASE" then "startup" else "player_detector_dev" end
+	local file_name = (status == "RELEASE") and "startup" or "player_detector_dev"
     local file = fs.open(file_name .. "lua", "w")
     file.write(body_content)
     file.close()
