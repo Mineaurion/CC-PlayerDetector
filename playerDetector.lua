@@ -1,12 +1,12 @@
 --- GLOBAL VARIABLES ---
 local json -- json API
 local config -- variable where the config will be loaded
-local defaultConfig = { -- default config, feel free to change it
-    ["version"] = 1.31,
+local defaultConfig = { -- default client config, feel free to change it
+    ["version"] = 1.32,
     ["status"] = "SNAPSHOT",
     ["sides"] = {"back", "front", "left", "right", "bottom", "top"},
     ["emit_redstone_when_connected"] = true,
-    ["api_uri"] = "https://api.mineaurion.com/v1/serveurs/"
+    ["api_uri"] = "https://api.mineaurion.com/v1/serveurs/",
 }
 
 --- INIT ---
@@ -145,7 +145,7 @@ local function init()
 
     -- rename the computer in order to preserve the program if the computer is removed and replaced
     local pseudos_str = ""
-    for _,pseudo in config["pseudos"] do
+    for _,pseudo in pairs(config["pseudos"]) do
         pseudos_str = pseudos_str .. "_" .. pseudo
     end
     shell.run("label set player_detector_de" .. pseudos_str)
