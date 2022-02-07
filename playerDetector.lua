@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.36,
+    ["version"] = 1.37,
     ["status"] = "SNAPSHOT",
     ["sides"] = {
         ["back"] = true,
@@ -147,7 +147,7 @@ local function setSides(save_config)
         print(side .. " : " .. tostring(status) .. " (statut courant)")
         local new_status = toBoolean(io.read())
         config["sides"][side] = new_status
-        rs.setOutput(side, 0)
+        rs.setOutput(side, false)
     end
 end
 
