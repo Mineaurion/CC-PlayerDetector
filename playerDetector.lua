@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.34,
+    ["version"] = 1.35,
     ["status"] = "SNAPSHOT",
     ["sides"] = {
         ["back"] = true,
@@ -88,7 +88,7 @@ local function update(should_old_config_be_erased, should_values_in_old_config_b
         config["version"] = defaultConfig["version"]
         saveConfig()
     end
-    print("Reboot...")
+    print("Update successful.\nReboot...")
     sleep(5)
     os.reboot()
 end
@@ -145,7 +145,9 @@ local function setSides(save_config)
     print("\nEcris 0 ou 1 selon si tu veux que le signal de redstone soit emit ou pas :")
     for side,status in pairs(config["sides"]) do
         print(side .. " : " .. status .. " (statut courant)")
-        config["sides"][side] = toBoolean(io.read())
+        local new_status = toBoolean(io.read())
+        config["sides"][side] = new_status
+        rs.setOutput(side, 0)
     end
 end
 
@@ -221,12 +223,16 @@ end
 -- Send or cut the redstone signal on all defined sides
 local function actualizeRedstone(boolean_signal)
     if boolean_signal then
-        for _,side in pairs(config["sides"]) do
-            rs.setOutput(side, config["emit_redstone_when_connected"])
+        for side,status in pairs(config["sides"]) do
+            if status then
+                rs.setOutput(side, config["emit_redstone_when_connected"])
+            end
         end
     else
-        for _,side in pairs(config["sides"]) do
-            rs.setOutput(side, config["emit_redstone_when_connected"])
+        for side,status in pairs(config["sides"]) do
+            if status then
+                rs.setOutput(side, config["emit_redstone_when_connected"])
+            end
         end
     end
 end
