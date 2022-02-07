@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default config, feel free to change it
-    ["version"] = 1.25,
+    ["version"] = 1.3,
     ["status"] = "SNAPSHOT",
     ["sides"] = {"back", "front", "left", "right", "bottom", "top"},
     ["emit_redstone_when_connected"] = true,
@@ -34,11 +34,11 @@ local function isUpToDate()
     live_config = json.decode(body_content)
     live_version = live_config["version"]
     current_version = config["version"]
-    return current_version >= live_version, live_config["should_old_config_be_erased"]
+    return current_version >= live_version, live_config["should_old_config_be_erased"], live_config["status"]
 end
 
 -- Update the program
-local function update(should_old_config_be_erased, should_values_in_old_config_be_copied_to_new_config)
+local function update(should_old_config_be_erased, should_values_in_old_config_be_copied_to_new_config, status)
     local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/playerDetector/master/playerDetector.lua")
     if not http_request then
         print("WARNING : failed to update. HTTP request failed.")
@@ -49,9 +49,10 @@ local function update(should_old_config_be_erased, should_values_in_old_config_b
         print("WARNING : failed to update. Request body is empty.")
         return
     end
-    local program_file = fs.open("startup.lua", "w")
-    program_file.write(body_content)
-    program_file.close()
+	local file_name = if status == "RELEASE" then "startup" else "player_detector_dev" end
+    local file = fs.open(file_name .. "lua", "w")
+    file.write(body_content)
+    file.close()
     if should_old_config_be_erased then
         shell.run("rm config.json")
     else
@@ -77,6 +78,39 @@ local function isServerIpValid(input)
     return true
 end
 
+-- Ask the player to write the pseudos to detect and update the config
+local function setPseudosList(save_config)
+    config["pseudos"] = {}
+    print("Ecris les pseudos a detecter (appuyer sur entrer pour l'ajout et aussi quand tu as termine) :")
+    local input
+    repeat
+        input = io.read()
+        if input ~= "" then
+            table.insert(config["pseudos"], input)
+        end
+    until input==""
+    if save_config then
+        saveConfig()
+    end
+end
+
+-- Ask the player to write the IP of the server he is on and update the config
+local function setServer(save_config)
+    print("Ecris l'IP du serveur sur lequel tu es (ex: infinity.mineaurion.com) :")
+    local input
+    repeat
+        if input then -- enters the condition only if the player entered a wrong server IP
+            print("L'IP renseignee n'existe pas ou l'API Mineaurion n'est pas accessible.")
+            print("Retente :")
+        end
+        input = io.read()
+    until isServerIpValid(input)
+    config["server_ip"] = input
+    if save_config then
+        saveConfig()
+    end
+end
+
 local function init()
     -- load json API
     if not (fs.exists("json") or fs.exists("json.lua") or fs.exists("rom/modules/main/json.lua") or fs.exists("rom/modules/main/json.lua")) then
@@ -98,43 +132,33 @@ local function init()
         term.setCursorPos(1, 1)
         
         -- Input
-        config["pseudos"] = {}
-        print("Ecris les pseudos a detecter (appuyer sur entrer pour l'ajout et aussi quand tu as termine) :")
-        local input
-        repeat
-            input = io.read()
-            if input ~= "" then
-                table.insert(config["pseudos"], input)
-            end
-        until input==""
-
-        print("Ecris l'IP du serveur sur lequel tu es (ex: infinity.mineaurion.com) :")
-        local input
-        repeat
-            if input then -- enters the condition only if the player entered a wrong server IP
-                print("L'IP renseignee n'existe pas ou l'API Mineaurion n'est pas accessible.")
-                print("Retente :")
-            end
-            input = io.read()
-        until isServerIpValid(input)
-        config["server_ip"] = input
+        setPseudosList(false)
+        setServer(false)
 
         -- Write config
         saveConfig()
+        print("INFO : config saved.\n")
     end
 
     -- Read config file
     config = json.decodeFromFile("/config.json")
 
+    -- rename the computer in order to preserve the program if the computer is removed and replaced
+    local pseudos_str = ""
+    for _,pseudo in config["pseudos"] do
+        pseudos_str = pseudos_str .. "_" .. pseudo
+    end
+    shell.run("label set player_detector_de" .. pseudos_str)
+
     -- check update
-    local is_up_to_date, should_old_config_be_erased = isUpToDate()
+    local is_up_to_date, should_old_config_be_erased, status = isUpToDate()
     if is_up_to_date then
         print("INFO : Up to date in version : " .. config["version"] .. "-" .. config["status"])
     elseif is_up_to_date == "nil" then
         print("INFO : Checking for updates failed.")
     else
         print("INFO : Updating...")
-        update(should_old_config_be_erased) -- the computer should reboot if the update is successful
+        update(should_old_config_be_erased, status) -- the computer should reboot if the update is successful
         print("INFO : Update failed.")
     end
 end
@@ -145,10 +169,10 @@ local function has_value(tab, val)
     for index,value in pairs(tab) do
       if value == val then
         return true
-       end
-     end
-     return false
-  end
+      end
+    end
+    return false
+end
 
 
 --- FUNCTIONS ---
@@ -181,8 +205,36 @@ local function actualizeRedstone(boolean_signal)
     end
 end
 
+-- Change the config
+local function changeConfig(key)
+    if string.upper(key) == "RESET_PSEUDOS" then
+        setPseudosList(true)
+    elseif string.upper(key) == "RESET_SERVEUR_IP" then
+        setServer(true)
+    else
+        print("Commande non reconnues, liste commandes reconnues : RESET_PSEUDOS, RESET_SERVEUR_IP")
+        return
+    end
+    os.reboot()
+end
 
 --- MAIN ---
+local function runDetector()
+    while true do
+        actualizeRedstone(arePlayersConnected(config["pseudos"], config["server_ip"]))
+        sleep(30)
+    end
+end
+
+local function runEditConfig()
+    while true do
+        print("\nPour reset la config taper au choix : RESET_PSEUDOS, RESET_SERVEUR_IP")
+        local input = io.read()
+        changeConfig(input)
+        sleep(0)
+    end
+end
+
 local function main()
     init()
     print("\nDetecte les joueurs : " .. textutils.serialise(config["pseudos"]))
@@ -194,10 +246,7 @@ local function main()
         print("\nN'emet PAS signal redstone quand un des joueur est connecte, sinon oui.")
         print("Il suffit de coller le computer aux spawners, ou d'utiliser des transmitter/receiver de redstone.")
     end
-    while true do
-        actualizeRedstone(arePlayersConnected(config["pseudos"], config["server_ip"]))
-        sleep(30)
-    end
+    parallel.waitForAll(runDetector, runEditConfig)
 end
 
 main()
