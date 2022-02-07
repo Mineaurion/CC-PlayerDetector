@@ -2,8 +2,8 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.37,
-    ["status"] = "SNAPSHOT",
+    ["version"] = 1.4,
+    ["status"] = "RELEASE",
     ["sides"] = {
         ["back"] = true,
         ["front"] = true,
