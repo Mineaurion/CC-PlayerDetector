@@ -2,8 +2,8 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.43,
-    ["status"] = "SNAPSHOT",
+    ["version"] = 1.5,
+    ["status"] = "RELEASE",
     ["sides"] = {
         ["back"] = true,
         ["front"] = true,
@@ -261,7 +261,7 @@ end
 local function runDetector()
     while true do
         actualizeRedstone(arePlayersConnected(config["pseudos"], config["server_ip"]))
-        sleep(30)
+        sleep(60)
     end
 end
 
