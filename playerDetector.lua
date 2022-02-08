@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.42,
+    ["version"] = 1.43,
     ["status"] = "SNAPSHOT",
     ["sides"] = {
         ["back"] = true,
@@ -62,7 +62,7 @@ local function isUpToDate()
     end
     live_config = json.decode(body_content)
     live_version = live_config["version"]
-    current_version = (config ~= nil) and config["version"] or 0
+    current_version = defaultConfig["version"]
     return current_version >= live_version, live_config["should_old_config_be_erased"], live_config["status"]
 end
 
