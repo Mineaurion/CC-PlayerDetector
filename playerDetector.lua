@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.41,
+    ["version"] = 1.42,
     ["status"] = "RELEASE",
     ["sides"] = {
         ["back"] = true,
@@ -67,7 +67,7 @@ local function isUpToDate()
 end
 
 -- Update the program
-local function update(should_old_config_be_erased, should_values_in_old_config_be_copied_to_new_config, status)
+local function update(should_old_config_be_erased, status)
     local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/playerDetector/master/playerDetector.lua")
     if not http_request then
         print("WARNING : failed to update. HTTP request failed.")
