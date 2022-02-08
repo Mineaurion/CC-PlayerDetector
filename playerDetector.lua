@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.4,
+    ["version"] = 1.41,
     ["status"] = "RELEASE",
     ["sides"] = {
         ["back"] = true,
@@ -62,7 +62,7 @@ local function isUpToDate()
     end
     live_config = json.decode(body_content)
     live_version = live_config["version"]
-    current_version = config["version"]
+    current_version = (config ~= nil) and config["version"] or 0
     return current_version >= live_version, live_config["should_old_config_be_erased"], live_config["status"]
 end
 
@@ -85,8 +85,10 @@ local function update(should_old_config_be_erased, should_values_in_old_config_b
     if should_old_config_be_erased then
         shell.run("rm config.json")
     else
-        config["version"] = defaultConfig["version"]
-        saveConfig()
+        if fs.exists("config.json") then -- prevent from writing a config if none already exist
+            config["version"] = defaultConfig["version"]
+            saveConfig()
+        end
     end
     print("INFO : update successful.\nINFO : reboot...")
     sleep(5)
@@ -167,17 +169,27 @@ local function init()
     end
     json = require("json")
 
+    -- check update
+    local is_up_to_date, should_old_config_be_erased, status = isUpToDate()
+    if is_up_to_date then
+        print("INFO : Up to date in version : " .. defaultConfig["version"] .. "-" .. defaultConfig["status"])
+    elseif is_up_to_date == "nil" then
+        print("INFO : Checking for updates failed.")
+    else
+        print("INFO : Updating...")
+        update(should_old_config_be_erased, status) -- the computer should reboot if the update is successful
+        print("INFO : Update failed.")
+    end
+
     -- Check if config file exists, otherwise create it
     if not fs.exists("config.json") then
         config = defaultConfig
         -- Reset display
         term.clear()
         term.setCursorPos(1, 1)
-        
         -- Input
         setPseudosList(false)
         setServer(false)
-
         -- Write config
         saveConfig()
         print("INFO : config saved.\n")
@@ -192,18 +204,6 @@ local function init()
         pseudos_str = pseudos_str .. "_" .. pseudo
     end
     shell.run("label set player_detector_de" .. pseudos_str)
-
-    -- check update
-    local is_up_to_date, should_old_config_be_erased, status = isUpToDate()
-    if is_up_to_date then
-        print("INFO : Up to date in version : " .. config["version"] .. "-" .. config["status"])
-    elseif is_up_to_date == "nil" then
-        print("INFO : Checking for updates failed.")
-    else
-        print("INFO : Updating...")
-        update(should_old_config_be_erased, status) -- the computer should reboot if the update is successful
-        print("INFO : Update failed.")
-    end
 end
 
 --- FUNCTIONS ---
