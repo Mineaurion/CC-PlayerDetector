@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.5,
+    ["version"] = 1.51,
     ["status"] = "RELEASE",
     ["sides"] = {
         ["back"] = true,
@@ -82,6 +82,9 @@ local function update(should_old_config_be_erased, status)
     local file = fs.open(file_name, "w")
     file.write(body_content)
     file.close()
+    if status == "SNAPSHOT" then
+        shell.run("rm player_detector_dev")
+    end
     if should_old_config_be_erased then
         shell.run("rm config.json")
     else
@@ -208,15 +211,25 @@ end
 
 --- FUNCTIONS ---
 -- Returns true if the player is connected, false otherwise
-local function arePlayersConnected(players, serverID)
-    local http_request = http.get(config["api_uri"] .. config["server_ip"]).readAll()
-    local body_content = json.decode(http_request)
-    local joueurs = body_content["joueurs"]
-    if not joueurs or not next(joueurs) then
+local function arePlayersConnected(registered_pseudos, serverID)
+    local http_request = http.get(config["api_uri"] .. serverID)
+    if not http_request then
+        print("WARNING : unable to reach Mineaurion API. HTTP request failed.")
         return false
     end
-    for _,player in pairs(players) do
-        if hasValue(joueurs, player) then
+    local body_content = http_request.readAll()
+    if body_content == "" or body_content == "[]" then
+        print("WARNING : unable to reach Mineaurion API. Request body is empty.")
+        return false
+    end
+
+    local body_content = json.decode(body_content)
+    local connected_players = body_content["joueurs"]
+    if not connected_players or not next(connected_players) then
+        return false
+    end
+    for _,pseudo in pairs(registered_pseudos) do
+        if hasValue(connected_players, pseudo) then
             return true
         end
     end
@@ -224,18 +237,10 @@ local function arePlayersConnected(players, serverID)
 end
 
 -- Send or cut the redstone signal on all defined sides
-local function actualizeRedstone(boolean_signal)
-    if boolean_signal then
-        for side,status in pairs(config["sides"]) do
-            if status then
-                rs.setOutput(side, config["emit_redstone_when_connected"])
-            end
-        end
-    else
-        for side,status in pairs(config["sides"]) do
-            if status then
-                rs.setOutput(side, config["emit_redstone_when_connected"])
-            end
+local function actualizeRedstone(player_connected)
+    for side,status in pairs(config["sides"]) do
+        if status then
+            rs.setOutput(side, config["emit_redstone_when_connected"] == player_connected)
         end
     end
 end
@@ -260,7 +265,8 @@ end
 --- MAIN ---
 local function runDetector()
     while true do
-        actualizeRedstone(arePlayersConnected(config["pseudos"], config["server_ip"]))
+        local is_someone_connected = arePlayersConnected(config["pseudos"], config["server_ip"])
+        actualizeRedstone(is_someone_connected)
         sleep(60)
     end
 end
