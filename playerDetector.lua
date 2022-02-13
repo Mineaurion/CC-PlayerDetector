@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.51,
+    ["version"] = 1.52,
     ["status"] = "RELEASE",
     ["sides"] = {
         ["back"] = true,
@@ -82,9 +82,6 @@ local function update(should_old_config_be_erased, status)
     local file = fs.open(file_name, "w")
     file.write(body_content)
     file.close()
-    if status == "SNAPSHOT" then
-        shell.run("rm player_detector_dev")
-    end
     if should_old_config_be_erased then
         shell.run("rm config.json")
     else
@@ -92,6 +89,9 @@ local function update(should_old_config_be_erased, status)
             config["version"] = defaultConfig["version"]
             saveConfig()
         end
+    end
+    if status == "RELEASE" then
+        shell.run("rm player_detector_dev")
     end
     print("INFO : update successful.\nINFO : reboot...")
     sleep(5)
