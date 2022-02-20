@@ -2,7 +2,7 @@
 local json -- json API
 local config -- variable where the config will be loaded
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.52,
+    ["version"] = 1.53,
     ["status"] = "RELEASE",
     ["sides"] = {
         ["back"] = true,
@@ -150,7 +150,8 @@ local function setSides(save_config)
     print("\nEcris 0 ou 1 selon si tu veux que le signal de redstone soit emit ou pas :")
     for side,status in pairs(config["sides"]) do
         print(side .. " : " .. tostring(status) .. " (statut courant)")
-        local new_status = toBoolean(io.read())
+        local input = io.read()
+        local new_status = (input == "") or toBoolean(input)
         config["sides"][side] = new_status
         rs.setOutput(side, false)
     end
