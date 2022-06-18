@@ -1,8 +1,9 @@
 --- GLOBAL VARIABLES ---
 local json -- json API
 local config -- variable where the config will be loaded
+local api_url = "http://api.mineaurion.com/"
 local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.53,
+    ["version"] = 2.0,
     ["status"] = "RELEASE",
     ["sides"] = {
         ["back"] = true,
@@ -13,16 +14,20 @@ local defaultConfig = { -- default client config, feel free to change it
         ["top"] = true
     },
     ["emit_redstone_when_connected"] = true,
-    ["api_uri"] = "http://api.mineaurion.com/",
 }
 
 -- github informations for auto update purpose
 local organization_name = "Mineaurion"
 local repo_name = "CC-PlayerDetector"
 local branch = "master"
+local dev_branch = "evolution-new-api"
 
 --- COMPUTED VARIABLES ---
+local args = {...}
 local base_repo_content_url = "https://raw.githubusercontent.com/" .. organization_name .. "/" .. repo_name .. "/" .. branch .."/"
+if args[1] == "dev" then
+    base_repo_content_url = "https://raw.githubusercontent.com/" .. organization_name .. "/" .. repo_name .. "/" .. dev_branch .."/"
+end
 
 --- UTILS ---
 -- Returns true if the tab contains the val
@@ -56,7 +61,7 @@ local function saveConfig()
     file.close()
 end
 
--- Returns true if the program is up to date, false otherwise and nil on error
+-- Returns true if the program is up to date, false otherwise or if the remote version is not a release and nil on error
 local function isUpToDate()
     local http_request = http.get(base_repo_content_url .. "version.json")
     if not http_request then
@@ -69,9 +74,9 @@ local function isUpToDate()
         return nil
     end
     live_config = json.decode(body_content)
-    live_version = live_config["version"]
     current_version = defaultConfig["version"]
-    return current_version >= live_version, live_config["should_old_config_be_erased"], live_config["status"]
+    is_up_to_date = live_config["status"] == "RELEASE" and current_version >= live_config["version"]
+    return is_up_to_date, live_config["should_old_config_be_erased"], live_config["status"]
 end
 
 -- Update the program
@@ -86,10 +91,15 @@ local function update(should_old_config_be_erased, status)
         print("WARNING : failed to update. Request body is empty.")
         return
     end
+    -- if the status is a release then overwrite the code of statup.lua and erase player_detector_dev.lua, otherwise create file player_detector_dev.lua
 	local file_name = (status == "RELEASE") and "startup" or "player_detector_dev"
     local file = fs.open(file_name, "w")
     file.write(body_content)
     file.close()
+    if status == "RELEASE" then
+        shell.run("rm player_detector_dev")
+    end
+    -- erase the local config if the new version has breaking changes
     if should_old_config_be_erased then
         shell.run("rm config.json")
     else
@@ -98,9 +108,6 @@ local function update(should_old_config_be_erased, status)
             saveConfig()
         end
     end
-    if status == "RELEASE" then
-        shell.run("rm player_detector_dev")
-    end
     print("INFO : update successful.\nINFO : reboot...")
     sleep(5)
     os.reboot()
@@ -108,7 +115,7 @@ end
 
 -- Returns true if the server ip exists, false otherwise and nil if the API is not reachable
 local function isServerIpValid(input)
-    local http_request = http.get(defaultConfig["api_uri"] .. input)
+    local http_request = http.get(api_url .. "query/" .. input)
     if not http_request then
         print("WARNING : failed to access the API. HTTP request failed.")
         return nil
@@ -173,7 +180,7 @@ local function init()
     if not (fs.exists("json") or fs.exists("json.lua") or fs.exists("rom/modules/main/json.lua") or fs.exists("rom/modules/main/json.lua")) then
         print("INFO : json API not installed yet, downloading...")
         local http_request = http.get(base_repo_content_url .. "json.lua")
-        assert(http_request, "ERROR : failed to download the json API. HTTP request failed.")
+        assert(http_request, "ERROR : failed to download the json API. HTTP request failed on" .. base_repo_content_url .. "json.lua")
         local f = fs.open("json.lua", "w")
         f.write(http_request.readAll())
         f.close()
@@ -210,7 +217,7 @@ local function init()
     -- Read config file
     config = json.decodeFromFile("/config.json")
 
-    -- rename the computer in order to preserve the program if the computer is removed and replaced
+    -- rename the computer in order to preserve the program if the computer is broke and replaced
     local pseudos_str = ""
     for _,pseudo in pairs(config["pseudos"]) do
         pseudos_str = pseudos_str .. "_" .. pseudo
@@ -221,22 +228,23 @@ end
 --- FUNCTIONS ---
 -- Returns true if the player is connected, false otherwise
 local function arePlayersConnected(registered_pseudos, serverID)
-    local http_request = http.get(config["api_uri"] .. serverID)
+    local http_request = http.get(api_url .. "query/" .. serverID)
     if not http_request then
         print("WARNING : unable to reach Mineaurion API. HTTP request failed.")
         return false
     end
     local body_content = http_request.readAll()
-    if body_content == "" or body_content == "[]" then
+    if body_content == "" or body_content == "[]" or body_content == "{}" then
         print("WARNING : unable to reach Mineaurion API. Request body is empty.")
         return false
     end
 
     local body_content = json.decode(body_content)
-    local connected_players = body_content["joueurs"]
+    local connected_players = body_content["players"]
     if not connected_players or not next(connected_players) then
         return false
     end
+    
     for _,pseudo in pairs(registered_pseudos) do
         if hasValue(connected_players, pseudo) then
             return true
@@ -245,6 +253,7 @@ local function arePlayersConnected(registered_pseudos, serverID)
     return false
 end
 
+--- OTHER FUNCTIONS ---
 -- Send or cut the redstone signal on all defined sides
 local function actualizeRedstone(player_connected)
     for side,status in pairs(config["sides"]) do
@@ -272,7 +281,7 @@ local function doAction(key)
 end
 
 --- MAIN ---
-local function runDetector()
+local function runPlayerDetector()
     while true do
         local is_someone_connected = arePlayersConnected(config["pseudos"], config["server_ip"])
         actualizeRedstone(is_someone_connected)
@@ -280,7 +289,7 @@ local function runDetector()
     end
 end
 
-local function runDetectAction()
+local function runDetectCommand()
     while true do
         print("\nPour reset la config taper au choix ou reboot, ecris : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
         local input = io.read()
@@ -300,7 +309,7 @@ local function main()
         print("\nN'emet PAS signal redstone quand un des joueur est connecte, sinon oui.")
         print("Il suffit de coller le computer aux spawners, ou d'utiliser des transmitter/receiver de redstone.")
     end
-    parallel.waitForAny(runDetector, runDetectAction)
+    parallel.waitForAny(runPlayerDetector, runDetectCommand)
 end
 
 main()

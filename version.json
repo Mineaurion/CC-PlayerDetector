@@ -1,6 +1,6 @@
 {
     "program": "playerDetector.lua",
-    "version": 1.53,
+    "version": 2.0,
     "status": "RELEASE",
     "should_old_config_be_erased": false
 }
