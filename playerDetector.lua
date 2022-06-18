@@ -1,6 +1,7 @@
 --- GLOBAL VARIABLES ---
 local json -- json API
 local config -- variable where the config will be loaded from the file config.json
+local version -- variable where the informations about the version will be loaded from the file version.json
 local api_url = "http://api.mineaurion.com/"
 
 -- github informations for auto update purpose
@@ -57,7 +58,7 @@ local function createVersionFile()
     version_json = json.decode(body_content)
     version_json["should_old_config_be_erased"] = nil
     local file = assert(fs.open("version.json", "w"))
-    file.write(json.encode(version_json))
+    file.write(json.encodePretty(version_json))
     file.close()
 end
 
@@ -74,10 +75,12 @@ local function isUpToDate()
         return nil
     end
     live_version = json.decode(body_content)
-    version = json.decodeFromFile("version.json")
     current_version = version["version"]
+    -- true if the status is release and it's a new version
     is_up_to_date = live_version["status"] == "RELEASE" and current_version >= live_version["version"]
-    return is_up_to_date, live_version["should_old_config_be_erased"], live_version["status"], live_version["version"]
+    -- true if it's a new version and the flag to delete config is true
+    should_old_config_be_erased = current_version >= live_version["version"] and live_version["should_old_config_be_erased"]
+    return is_up_to_date, should_old_config_be_erased, live_version["status"], live_version["version"]
 end
 
 -- Update the program
@@ -99,14 +102,22 @@ local function update(should_old_config_be_erased, live_status, live_version)
     file.close()
     if status == "RELEASE" then
         shell.run("rm player_detector_dev")
+    else
+        print("INFO : DEV MODE : UPDATED FILE player_detector_dev")
+        if fs.exists("statup") then
+            shell.run("mv startup startup.old")
+            createVersionFile()
+            return
+        end
     end
+
     -- erase the local config if the new version has breaking changes
     if should_old_config_be_erased then
-        shell.run("rm config.json")       
+        shell.run("rm config.json")
     end
     -- re-create version.json file
     createVersionFile()
-    print("INFO : update from version" .. config["version"] .. "-" .. config["status"] .. "to version" .. live_version .. "-" .. live_status  .. "successful.\nINFO : reboot...")
+    print("INFO : update from version " .. version["version"] .. "-" .. version["status"] .. " to version " .. live_version .. "-" .. live_status  .. " successful.\nINFO : reboot...")
     sleep(5)
     os.reboot()
 end
@@ -191,10 +202,11 @@ local function init()
     if not fs.exists("version.json") then
         createVersionFile()
     end
+    version = json.decodeFromFile("version.json") -- load version
 
     -- check if config file exists, otherwise create it
     if not fs.exists("config.json") then
-        local url = base_repo_content_url .. "default_config.json"
+        local url = base_repo_content_url .. "default_local_config.json"
         local http_request = http.get(url)
         assert(http_request, "ERROR : unable to reach github repo. HTTP request failed on" .. url)
         config = json.decode(http_request.readAll())
@@ -208,17 +220,17 @@ local function init()
         saveConfig()
         print("INFO : config saved.\n")
     end
+    config = json.decodeFromFile("config.json") -- load config
 
     -- check updates
     local is_up_to_date, should_old_config_be_erased, live_status, live_status = isUpToDate()
     if is_up_to_date then
-        print("INFO : Up to date in version : " .. config["version"] .. "-" .. config["status"])
+        print("INFO : Up to date in version : " .. version["version"] .. "-" .. version["status"])
     elseif is_up_to_date == "nil" then
         print("INFO : Checking for updates failed.")
     else
         print("INFO : Updating...")
-        update(should_old_config_be_erased, live_status, live_status) -- the computer should reboot if the update is successful
-        print("INFO : Update failed.")
+        update(should_old_config_be_erased, live_status, live_status) -- the computer should reboot if the update is successful except in dev mode
     end
 
     -- Read config file
@@ -279,7 +291,6 @@ local function doAction(key)
     elseif string.upper(key) == "CONFIG_SIDES" then
         setSides(true)
     elseif string.upper(key) == "REBOOT" then
-        os.reboot()
     else
         print("\nCommande non reconnue, liste des commandes reconnues : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
         return
@@ -298,7 +309,7 @@ end
 
 local function runDetectCommand()
     while true do
-        print("\nPour reset la config taper au choix ou reboot, ecris : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
+        print("\nCommandes disponibles (a taper ci-dessous) : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
         local input = io.read()
         doAction(input)
         sleep(0)

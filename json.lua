@@ -1,6 +1,6 @@
 -- Original code written by ElvishJerricco ( http://www.computercraft.info/forums2/index.php?/topic/5854-json-api-v201-for-computercraft/ )
 -- Code modified by DaikiKaminari for personnal purpose, transformed it to a library that can be loaded using the "require" function
--- v2.0.5-DAIKI-1
+-- v2.0.6-DAIKI-1
 
 
 ------------------------------------------------------------------ library
