@@ -13,8 +13,16 @@ local defaultConfig = { -- default client config, feel free to change it
         ["top"] = true
     },
     ["emit_redstone_when_connected"] = true,
-    ["api_uri"] = "https://api.mineaurion.com/v1/serveurs/",
+    ["api_uri"] = "http://api.mineaurion.com/",
 }
+
+-- github informations for auto update purpose
+local organization_name = "Mineaurion"
+local repo_name = "CC-PlayerDetector"
+local branch = "master"
+
+--- COMPUTED VARIABLES ---
+local base_repo_content_url = "https://raw.githubusercontent.com/" .. organization_name .. "/" .. repo_name .. "/" .. branch .."/"
 
 --- UTILS ---
 -- Returns true if the tab contains the val
@@ -50,7 +58,7 @@ end
 
 -- Returns true if the program is up to date, false otherwise and nil on error
 local function isUpToDate()
-    local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/playerDetector/master/version.json")
+    local http_request = http.get(base_repo_content_url .. "version.json")
     if not http_request then
         print("WARNING : unable to check if the program is up to date. HTTP request failed.")
         return nil
@@ -68,7 +76,7 @@ end
 
 -- Update the program
 local function update(should_old_config_be_erased, status)
-    local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/playerDetector/master/playerDetector.lua")
+    local http_request = http.get(base_repo_content_url .. "playerDetector.lua")
     if not http_request then
         print("WARNING : failed to update. HTTP request failed.")
         return
@@ -164,7 +172,7 @@ local function init()
     -- load json API
     if not (fs.exists("json") or fs.exists("json.lua") or fs.exists("rom/modules/main/json.lua") or fs.exists("rom/modules/main/json.lua")) then
         print("INFO : json API not installed yet, downloading...")
-        local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/CC-Libs/master/ObjectJSON/json.lua")
+        local http_request = http.get(base_repo_content_url .. "json.lua")
         assert(http_request, "ERROR : failed to download the json API. HTTP request failed.")
         local f = fs.open("json.lua", "w")
         f.write(http_request.readAll())
