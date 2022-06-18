@@ -1,20 +1,7 @@
 --- GLOBAL VARIABLES ---
 local json -- json API
-local config -- variable where the config will be loaded
+local config -- variable where the config will be loaded from the file config.json
 local api_url = "http://api.mineaurion.com/"
-local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 2.0,
-    ["status"] = "RELEASE",
-    ["sides"] = {
-        ["back"] = true,
-        ["front"] = true,
-        ["left"] = true,
-        ["right"] = true,
-        ["bottom"] = true,
-        ["top"] = true
-    },
-    ["emit_redstone_when_connected"] = true,
-}
 
 -- github informations for auto update purpose
 local organization_name = "Mineaurion"
@@ -61,6 +48,19 @@ local function saveConfig()
     file.close()
 end
 
+-- Creates local version.json file based on remote version.json file
+local function createVersionFile()
+    local url = base_repo_content_url .. "version.json"
+    local http_request = http.get(url)
+    assert(http_request, "ERROR : unable to reach github repo. HTTP request failed on" .. url)
+    body_content = http_request.readAll()
+    version_json = json.decode(body_content)
+    version_json["should_old_config_be_erased"] = nil
+    local file = assert(fs.open("version.json", "w"))
+    file.write(json.encode(version_json))
+    file.close()
+end
+
 -- Returns true if the program is up to date, false otherwise or if the remote version is not a release and nil on error
 local function isUpToDate()
     local http_request = http.get(base_repo_content_url .. "version.json")
@@ -73,14 +73,15 @@ local function isUpToDate()
         print("WARNING : unable to check if the program is up to date. Request body is empty.")
         return nil
     end
-    live_config = json.decode(body_content)
-    current_version = defaultConfig["version"]
-    is_up_to_date = live_config["status"] == "RELEASE" and current_version >= live_config["version"]
-    return is_up_to_date, live_config["should_old_config_be_erased"], live_config["status"]
+    live_version = json.decode(body_content)
+    version = json.decodeFromFile("version.json")
+    current_version = version["version"]
+    is_up_to_date = live_version["status"] == "RELEASE" and current_version >= live_version["version"]
+    return is_up_to_date, live_version["should_old_config_be_erased"], live_version["status"], live_version["version"]
 end
 
 -- Update the program
-local function update(should_old_config_be_erased, status)
+local function update(should_old_config_be_erased, live_status, live_version)
     local http_request = http.get(base_repo_content_url .. "playerDetector.lua")
     if not http_request then
         print("WARNING : failed to update. HTTP request failed.")
@@ -101,14 +102,11 @@ local function update(should_old_config_be_erased, status)
     end
     -- erase the local config if the new version has breaking changes
     if should_old_config_be_erased then
-        shell.run("rm config.json")
-    else
-        if fs.exists("config.json") then -- prevent from writing a config if none already exist
-            config["version"] = defaultConfig["version"]
-            saveConfig()
-        end
+        shell.run("rm config.json")       
     end
-    print("INFO : update successful.\nINFO : reboot...")
+    -- re-create version.json file
+    createVersionFile()
+    print("INFO : update from version" .. config["version"] .. "-" .. config["status"] .. "to version" .. live_version .. "-" .. live_status  .. "successful.\nINFO : reboot...")
     sleep(5)
     os.reboot()
 end
@@ -179,8 +177,9 @@ local function init()
     -- load json API
     if not (fs.exists("json") or fs.exists("json.lua") or fs.exists("rom/modules/main/json.lua") or fs.exists("rom/modules/main/json.lua")) then
         print("INFO : json API not installed yet, downloading...")
-        local http_request = http.get(base_repo_content_url .. "json.lua")
-        assert(http_request, "ERROR : failed to download the json API. HTTP request failed on" .. base_repo_content_url .. "json.lua")
+        local url = base_repo_content_url .. "json.lua"
+        local http_request = http.get(url)
+        assert(http_request, "ERROR : failed to download the json API. HTTP request failed on" .. url)
         local f = fs.open("json.lua", "w")
         f.write(http_request.readAll())
         f.close()
@@ -188,21 +187,17 @@ local function init()
     end
     json = require("json")
 
-    -- check update
-    local is_up_to_date, should_old_config_be_erased, status = isUpToDate()
-    if is_up_to_date then
-        print("INFO : Up to date in version : " .. defaultConfig["version"] .. "-" .. defaultConfig["status"])
-    elseif is_up_to_date == "nil" then
-        print("INFO : Checking for updates failed.")
-    else
-        print("INFO : Updating...")
-        update(should_old_config_be_erased, status) -- the computer should reboot if the update is successful
-        print("INFO : Update failed.")
+    -- check if version.json file exists, otherwise create it
+    if not fs.exists("version.json") then
+        createVersionFile()
     end
 
-    -- Check if config file exists, otherwise create it
+    -- check if config file exists, otherwise create it
     if not fs.exists("config.json") then
-        config = defaultConfig
+        local url = base_repo_content_url .. "default_config.json"
+        local http_request = http.get(url)
+        assert(http_request, "ERROR : unable to reach github repo. HTTP request failed on" .. url)
+        config = json.decode(http_request.readAll())
         -- Reset display
         term.clear()
         term.setCursorPos(1, 1)
@@ -212,6 +207,18 @@ local function init()
         -- Write config
         saveConfig()
         print("INFO : config saved.\n")
+    end
+
+    -- check updates
+    local is_up_to_date, should_old_config_be_erased, live_status, live_status = isUpToDate()
+    if is_up_to_date then
+        print("INFO : Up to date in version : " .. config["version"] .. "-" .. config["status"])
+    elseif is_up_to_date == "nil" then
+        print("INFO : Checking for updates failed.")
+    else
+        print("INFO : Updating...")
+        update(should_old_config_be_erased, live_status, live_status) -- the computer should reboot if the update is successful
+        print("INFO : Update failed.")
     end
 
     -- Read config file

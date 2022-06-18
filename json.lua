@@ -231,4 +231,12 @@ function decodeFromFile(path)
 end
 json.decodeFromFile = decodeFromFile
 
+function encodeToFile(t, path)
+	local encoded = encodePretty(t)
+	local file = assert(fs.open(path, "w"))
+	file.write(encoded)
+	file.close()
+	return encoded
+end
+
 return json
