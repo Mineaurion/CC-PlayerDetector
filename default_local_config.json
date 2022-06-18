@@ -1,0 +1,11 @@
+{
+    "sides" : {
+        "back": true,
+        "front": true,
+        "left": true,
+        "right": true,
+        "bottom": true,
+        "top": true
+    },
+    "emit_redstone_when_connected": true
+}

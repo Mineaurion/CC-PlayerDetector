@@ -1,20 +1,21 @@
 --- GLOBAL VARIABLES ---
 local json -- json API
-local config -- variable where the config will be loaded
-local defaultConfig = { -- default client config, feel free to change it
-    ["version"] = 1.53,
-    ["status"] = "RELEASE",
-    ["sides"] = {
-        ["back"] = true,
-        ["front"] = true,
-        ["left"] = true,
-        ["right"] = true,
-        ["bottom"] = true,
-        ["top"] = true
-    },
-    ["emit_redstone_when_connected"] = true,
-    ["api_uri"] = "https://api.mineaurion.com/v1/serveurs/",
-}
+local config -- variable where the config will be loaded from the file config.json
+local version -- variable where the informations about the version will be loaded from the file version.json
+local api_url = "http://api.mineaurion.com/"
+
+-- github informations for auto update purpose
+local organization_name = "Mineaurion"
+local repo_name = "CC-PlayerDetector"
+local branch = "master"
+local dev_branch = "evolution-new-api"
+
+--- COMPUTED VARIABLES ---
+local args = {...}
+local base_repo_content_url = "https://raw.githubusercontent.com/" .. organization_name .. "/" .. repo_name .. "/" .. branch .."/"
+if args[1] == "dev" then
+    base_repo_content_url = "https://raw.githubusercontent.com/" .. organization_name .. "/" .. repo_name .. "/" .. dev_branch .."/"
+end
 
 --- UTILS ---
 -- Returns true if the tab contains the val
@@ -48,9 +49,22 @@ local function saveConfig()
     file.close()
 end
 
--- Returns true if the program is up to date, false otherwise and nil on error
+-- Creates local version.json file based on remote version.json file
+local function createVersionFile()
+    local url = base_repo_content_url .. "version.json"
+    local http_request = http.get(url)
+    assert(http_request, "ERROR : unable to reach github repo. HTTP request failed on" .. url)
+    body_content = http_request.readAll()
+    version_json = json.decode(body_content)
+    version_json["should_old_config_be_erased"] = nil
+    local file = assert(fs.open("version.json", "w"))
+    file.write(json.encodePretty(version_json))
+    file.close()
+end
+
+-- Returns true if the program is up to date, false otherwise or if the remote version is not a release and nil on error
 local function isUpToDate()
-    local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/playerDetector/master/version.json")
+    local http_request = http.get(base_repo_content_url .. "version.json")
     if not http_request then
         print("WARNING : unable to check if the program is up to date. HTTP request failed.")
         return nil
@@ -60,15 +74,18 @@ local function isUpToDate()
         print("WARNING : unable to check if the program is up to date. Request body is empty.")
         return nil
     end
-    live_config = json.decode(body_content)
-    live_version = live_config["version"]
-    current_version = defaultConfig["version"]
-    return current_version >= live_version, live_config["should_old_config_be_erased"], live_config["status"]
+    live_version = json.decode(body_content)
+    current_version = version["version"]
+    -- true if the status is release and it's a new version
+    is_up_to_date = live_version["status"] == "RELEASE" and current_version >= live_version["version"]
+    -- true if it's a new version and the flag to delete config is true
+    should_old_config_be_erased = current_version >= live_version["version"] and live_version["should_old_config_be_erased"]
+    return is_up_to_date, should_old_config_be_erased, live_version["status"], live_version["version"]
 end
 
 -- Update the program
-local function update(should_old_config_be_erased, status)
-    local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/playerDetector/master/playerDetector.lua")
+local function update(should_old_config_be_erased, live_status, live_version)
+    local http_request = http.get(base_repo_content_url .. "playerDetector.lua")
     if not http_request then
         print("WARNING : failed to update. HTTP request failed.")
         return
@@ -78,29 +95,36 @@ local function update(should_old_config_be_erased, status)
         print("WARNING : failed to update. Request body is empty.")
         return
     end
+    -- if the status is a release then overwrite the code of statup.lua and erase player_detector_dev.lua, otherwise create file player_detector_dev.lua
 	local file_name = (status == "RELEASE") and "startup" or "player_detector_dev"
     local file = fs.open(file_name, "w")
     file.write(body_content)
     file.close()
-    if should_old_config_be_erased then
-        shell.run("rm config.json")
-    else
-        if fs.exists("config.json") then -- prevent from writing a config if none already exist
-            config["version"] = defaultConfig["version"]
-            saveConfig()
-        end
-    end
     if status == "RELEASE" then
         shell.run("rm player_detector_dev")
+    else
+        print("INFO : DEV MODE : UPDATED FILE player_detector_dev")
+        if fs.exists("statup") then
+            shell.run("mv startup startup.old")
+            createVersionFile()
+            return
+        end
     end
-    print("INFO : update successful.\nINFO : reboot...")
+
+    -- erase the local config if the new version has breaking changes
+    if should_old_config_be_erased then
+        shell.run("rm config.json")
+    end
+    -- re-create version.json file
+    createVersionFile()
+    print("INFO : update from version " .. version["version"] .. "-" .. version["status"] .. " to version " .. live_version .. "-" .. live_status  .. " successful.\nINFO : reboot...")
     sleep(5)
     os.reboot()
 end
 
 -- Returns true if the server ip exists, false otherwise and nil if the API is not reachable
 local function isServerIpValid(input)
-    local http_request = http.get(defaultConfig["api_uri"] .. input)
+    local http_request = http.get(api_url .. "query/" .. input)
     if not http_request then
         print("WARNING : failed to access the API. HTTP request failed.")
         return nil
@@ -164,8 +188,9 @@ local function init()
     -- load json API
     if not (fs.exists("json") or fs.exists("json.lua") or fs.exists("rom/modules/main/json.lua") or fs.exists("rom/modules/main/json.lua")) then
         print("INFO : json API not installed yet, downloading...")
-        local http_request = http.get("https://raw.githubusercontent.com/DaikiKaminari/CC-Libs/master/ObjectJSON/json.lua")
-        assert(http_request, "ERROR : failed to download the json API. HTTP request failed.")
+        local url = base_repo_content_url .. "json.lua"
+        local http_request = http.get(url)
+        assert(http_request, "ERROR : failed to download the json API. HTTP request failed on" .. url)
         local f = fs.open("json.lua", "w")
         f.write(http_request.readAll())
         f.close()
@@ -173,21 +198,18 @@ local function init()
     end
     json = require("json")
 
-    -- check update
-    local is_up_to_date, should_old_config_be_erased, status = isUpToDate()
-    if is_up_to_date then
-        print("INFO : Up to date in version : " .. defaultConfig["version"] .. "-" .. defaultConfig["status"])
-    elseif is_up_to_date == "nil" then
-        print("INFO : Checking for updates failed.")
-    else
-        print("INFO : Updating...")
-        update(should_old_config_be_erased, status) -- the computer should reboot if the update is successful
-        print("INFO : Update failed.")
+    -- check if version.json file exists, otherwise create it
+    if not fs.exists("version.json") then
+        createVersionFile()
     end
+    version = json.decodeFromFile("version.json") -- load version
 
-    -- Check if config file exists, otherwise create it
+    -- check if config file exists, otherwise create it
     if not fs.exists("config.json") then
-        config = defaultConfig
+        local url = base_repo_content_url .. "default_local_config.json"
+        local http_request = http.get(url)
+        assert(http_request, "ERROR : unable to reach github repo. HTTP request failed on" .. url)
+        config = json.decode(http_request.readAll())
         -- Reset display
         term.clear()
         term.setCursorPos(1, 1)
@@ -198,11 +220,23 @@ local function init()
         saveConfig()
         print("INFO : config saved.\n")
     end
+    config = json.decodeFromFile("config.json") -- load config
+
+    -- check updates
+    local is_up_to_date, should_old_config_be_erased, live_status, live_status = isUpToDate()
+    if is_up_to_date then
+        print("INFO : Up to date in version : " .. version["version"] .. "-" .. version["status"])
+    elseif is_up_to_date == "nil" then
+        print("INFO : Checking for updates failed.")
+    else
+        print("INFO : Updating...")
+        update(should_old_config_be_erased, live_status, live_status) -- the computer should reboot if the update is successful except in dev mode
+    end
 
     -- Read config file
     config = json.decodeFromFile("/config.json")
 
-    -- rename the computer in order to preserve the program if the computer is removed and replaced
+    -- rename the computer in order to preserve the program if the computer is broke and replaced
     local pseudos_str = ""
     for _,pseudo in pairs(config["pseudos"]) do
         pseudos_str = pseudos_str .. "_" .. pseudo
@@ -213,22 +247,23 @@ end
 --- FUNCTIONS ---
 -- Returns true if the player is connected, false otherwise
 local function arePlayersConnected(registered_pseudos, serverID)
-    local http_request = http.get(config["api_uri"] .. serverID)
+    local http_request = http.get(api_url .. "query/" .. serverID)
     if not http_request then
         print("WARNING : unable to reach Mineaurion API. HTTP request failed.")
         return false
     end
     local body_content = http_request.readAll()
-    if body_content == "" or body_content == "[]" then
+    if body_content == "" or body_content == "[]" or body_content == "{}" then
         print("WARNING : unable to reach Mineaurion API. Request body is empty.")
         return false
     end
 
     local body_content = json.decode(body_content)
-    local connected_players = body_content["joueurs"]
+    local connected_players = body_content["players"]
     if not connected_players or not next(connected_players) then
         return false
     end
+    
     for _,pseudo in pairs(registered_pseudos) do
         if hasValue(connected_players, pseudo) then
             return true
@@ -237,6 +272,7 @@ local function arePlayersConnected(registered_pseudos, serverID)
     return false
 end
 
+--- OTHER FUNCTIONS ---
 -- Send or cut the redstone signal on all defined sides
 local function actualizeRedstone(player_connected)
     for side,status in pairs(config["sides"]) do
@@ -255,7 +291,6 @@ local function doAction(key)
     elseif string.upper(key) == "CONFIG_SIDES" then
         setSides(true)
     elseif string.upper(key) == "REBOOT" then
-        os.reboot()
     else
         print("\nCommande non reconnue, liste des commandes reconnues : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
         return
@@ -264,7 +299,7 @@ local function doAction(key)
 end
 
 --- MAIN ---
-local function runDetector()
+local function runPlayerDetector()
     while true do
         local is_someone_connected = arePlayersConnected(config["pseudos"], config["server_ip"])
         actualizeRedstone(is_someone_connected)
@@ -272,9 +307,9 @@ local function runDetector()
     end
 end
 
-local function runDetectAction()
+local function runDetectCommand()
     while true do
-        print("\nPour reset la config taper au choix ou reboot, ecris : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
+        print("\nCommandes disponibles (a taper ci-dessous) : RESET_PSEUDOS, RESET_SERVER_IP, CONFIG_SIDES, REBOOT")
         local input = io.read()
         doAction(input)
         sleep(0)
@@ -292,7 +327,7 @@ local function main()
         print("\nN'emet PAS signal redstone quand un des joueur est connecte, sinon oui.")
         print("Il suffit de coller le computer aux spawners, ou d'utiliser des transmitter/receiver de redstone.")
     end
-    parallel.waitForAny(runDetector, runDetectAction)
+    parallel.waitForAny(runPlayerDetector, runDetectCommand)
 end
 
 main()
